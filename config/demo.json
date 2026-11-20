@@ -1,0 +1,22 @@
+{
+  "catalog_csv": "/tmp/seismic_demo/demo_catalog.csv",
+  "work_dir": "/tmp/seismic_demo/work",
+  "master": "local[2]",
+  "shuffle_partitions": 4,
+  "driver_memory": "2g",
+  "models": ["lr", "rf"],
+  "seeds": [1, 2],
+  "grid_lr": [0.01],
+  "grid_dt": [6],
+  "grid_rf": [6],
+  "rf_num_trees": 20,
+  "grid_gbt": [10],
+  "zone_k_candidates": [5, 8],
+  "n_boot": 200,
+  "scale_cores": [1, 2],
+  "scale_fractions": [0.5, 1.0],
+  "scale_partitions": [4, 8],
+  "scale_salt": [1, 4],
+  "tick_sim_hours": 24,
+  "tick_real_seconds": 0.2
+}

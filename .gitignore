@@ -1,0 +1,32 @@
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Generated project outputs
+outputs/
+
+# Spark temporary files
+spark-warehouse/
+metastore_db/
+derby.log/
+
+# Logs and temporary files
+*.log
+.DS_Store
+Thumbs.db
