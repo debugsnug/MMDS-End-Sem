@@ -30,3 +30,8 @@ derby.log/
 *.log
 .DS_Store
 Thumbs.db
+
+# Personal documents - never upload
+/IEEE Report Humainzed.docx
+/IEEE Report.docx
+/Team 2.pptx
