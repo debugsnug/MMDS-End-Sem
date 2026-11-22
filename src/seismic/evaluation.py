@@ -45,11 +45,13 @@ def adjusted_rand_index(df: DataFrame, col_a: str, col_b: str) -> float:
 
 
 # ---------------------------------------------------------------- Bath's law
-def bath_table(events: DataFrame, cluster_col: str, min_size: int = 5) -> pd.DataFrame:
+def bath_table(events: DataFrame, cluster_col: str, min_size: int = 5, min_main_mag: Optional[float] = None) -> pd.DataFrame:
     """Per cluster: largest event ('mainshock'), largest event *after* it, and their difference.
 
     events needs event_id, t_sec, magnitude and `cluster_col`. Bath's law predicts a mean difference
-    of about 1.2 magnitude units.
+    of about 1.2 magnitude units. `min_main_mag` keeps only clusters whose largest event has at least that magnitude: the pooled
+    mean of clusters with small mainshocks is biased low by the catalog cut-off (an M4.5 catalog cannot show a gap above 0.5 for an
+    M5 mainshock), so compare methods on the same mainshock-magnitude strata.
     """
     g = events.groupBy(cluster_col).agg(
         F.count("*").alias("size"),
@@ -57,6 +59,8 @@ def bath_table(events: DataFrame, cluster_col: str, min_size: int = 5) -> pd.Dat
                        F.col("event_id"), F.col("t_sec"))).alias("m"))
     main = g.select(cluster_col, "size", F.col("m.magnitude").alias("main_mag"),
                     F.col("m.t_sec").alias("main_t"), F.col("m.event_id").alias("main_id")).filter(F.col("size") >= min_size)
+    if min_main_mag is not None:
+        main = main.filter(F.col("main_mag") >= min_main_mag)
     after = (events.join(main.select(cluster_col, "main_t", "main_id"), cluster_col)
                    .filter((F.col("t_sec") > F.col("main_t")) & (F.col("event_id") != F.col("main_id")))
                    .groupBy(cluster_col).agg(F.max("magnitude").alias("largest_after")))

@@ -1,0 +1,41 @@
+{
+  "n_events": 31,
+  "n_positive": 27,
+  "base_rate": 0.8709677419354839,
+  "average_precision": 0.9809336550435712,
+  "roc_auc": 0.8703703703703703,
+  "informative": false,
+  "warning": "base rate 0.87 with 27 positives of 31 events: AP mostly reflects the base rate; this replay demonstrates the streaming mechanics, not predictive skill",
+  "largest_events": [
+    {
+      "event_id": "ci38457511",
+      "magnitude": 7.1,
+      "score": 0.455,
+      "y": 0
+    },
+    {
+      "event_id": "ci38443183",
+      "magnitude": 6.4,
+      "score": 0.07,
+      "y": 1
+    },
+    {
+      "event_id": "ci38457687",
+      "magnitude": 5.5,
+      "score": 0.686,
+      "y": 0
+    },
+    {
+      "event_id": "ci38457847",
+      "magnitude": 5.44,
+      "score": 0.683,
+      "y": 0
+    },
+    {
+      "event_id": "ci38450263",
+      "magnitude": 5.37,
+      "score": 0.459,
+      "y": 1
+    }
+  ]
+}

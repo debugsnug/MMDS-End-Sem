@@ -1,4 +1,4 @@
-# Tested with Python 3.12, Java 21 (Java 11/17 also fine), PySpark 3.5.1.
+# Validated on Ubuntu: Python 3.10.12, Java 17.0.19, PySpark 3.5.1.
 pyspark==3.5.1
 numpy>=1.24
 pandas>=1.5,<3        # pandas 3.x is not supported by PySpark 3.5

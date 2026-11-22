@@ -50,11 +50,14 @@ def test_salting_does_not_change_results(spark, ev, cfg):
 def test_experiment_plan_dedupes_and_covers_sweeps(cfg):
     from dataclasses import replace
     c = replace(cfg, scale_cores=[1, 2], scale_fractions=[0.5, 1.0], scale_partitions=[4, 8], scale_salt=[1, 4],
-                shuffle_partitions=8)
+                shuffle_partitions=8, scale_stress=[4])
     plan = scalability.experiment_plan(c)
-    keys = [(p["cores"], p["fraction"], p["partitions"], p["salt"]) for p in plan]
+    keys = [(p["cores"], p["fraction"], p["partitions"], p["salt"], p["stress"]) for p in plan]
     assert len(keys) == len(set(keys))
-    assert {p["exp"] for p in plan} == {"size", "partitions", "salt"}
+    assert {p["exp"] for p in plan} == {"size", "partitions", "salt", "stress"}
+    assert any(p["stress"] == 4 for p in plan)
+    ids = [scalability.run_id(p) for p in plan]
+    assert len(ids) == len(set(ids))
     assert any(p["salt"] == 4 for p in plan) and any(p["partitions"] == 4 for p in plan)
 
 

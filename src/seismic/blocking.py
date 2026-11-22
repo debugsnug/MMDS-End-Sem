@@ -92,6 +92,14 @@ def blocked_pairs(children: DataFrame, parents: DataFrame, *, max_radius_km: flo
     return c.join(p, ["k_x", "k_y", "k_z", "k_tb", "k_salt"], "inner")
 
 
+def exact_condition(lookback_days: float, parent_radius_km: Radius) -> Column:
+    """Boolean column of the exact test (parent strictly earlier, within look-back, within the parent's radius)."""
+    dt = F.col("c_t_sec") - F.col("p_t_sec")
+    radius = F.lit(float(parent_radius_km)) if isinstance(parent_radius_km, (int, float)) else parent_radius_km
+    d = haversine_km_col(F.col("p_latitude"), F.col("p_longitude"), F.col("c_latitude"), F.col("c_longitude"))
+    return (dt > 0) & (dt <= lookback_days * 86400.0) & (d <= radius)
+
+
 def refine_pairs(pairs: DataFrame, lookback_days: float, parent_radius_km: Radius) -> DataFrame:
     """Exact test: parent strictly earlier, within look-back, within parent's radius."""
     dt = F.col("c_t_sec") - F.col("p_t_sec")

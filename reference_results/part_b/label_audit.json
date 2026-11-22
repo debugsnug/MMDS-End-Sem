@@ -1,0 +1,21 @@
+{
+  "label_definition": "strictly larger event within 7.0 days and 50.0 km",
+  "trigger_min_mag": 4.5,
+  "total_triggers": 112484,
+  "overall_positive_rate": 0.2497866363216102,
+  "train": {
+    "n": 81589,
+    "positives": 20126,
+    "base_rate": 0.2466754096753239
+  },
+  "val": {
+    "n": 16582,
+    "positives": 4689,
+    "base_rate": 0.28277650464358944
+  },
+  "test": {
+    "n": 13919,
+    "positives": 3223,
+    "base_rate": 0.23155399094762555
+  }
+}

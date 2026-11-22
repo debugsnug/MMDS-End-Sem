@@ -1,0 +1,41 @@
+{
+  "n_events": 1322,
+  "n_positive": 1228,
+  "base_rate": 0.9288956127080181,
+  "average_precision": 0.9927222146641015,
+  "roc_auc": 0.9154957030979277,
+  "informative": false,
+  "warning": "base rate 0.93 with 1228 positives of 1322 events: AP mostly reflects the base rate; this replay demonstrates the streaming mechanics, not predictive skill",
+  "largest_events": [
+    {
+      "event_id": "official20110311054624120_30",
+      "magnitude": 9.1,
+      "score": 0.314,
+      "y": 0
+    },
+    {
+      "event_id": "usp000hvpa",
+      "magnitude": 7.9,
+      "score": 0.11,
+      "y": 0
+    },
+    {
+      "event_id": "usp000hvpg",
+      "magnitude": 7.7,
+      "score": 0.233,
+      "y": 0
+    },
+    {
+      "event_id": "usp000hvp5",
+      "magnitude": 6.7,
+      "score": 0.585,
+      "y": 0
+    },
+    {
+      "event_id": "usp000hvuu",
+      "magnitude": 6.6,
+      "score": 0.741,
+      "y": 0
+    }
+  ]
+}

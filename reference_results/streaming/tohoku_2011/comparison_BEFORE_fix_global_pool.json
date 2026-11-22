@@ -1,0 +1,11 @@
+{
+  "n_stream": 1322,
+  "n_batch": 1322,
+  "n_compared": 1322,
+  "max_abs_diff": 0.20125922766421078,
+  "mean_abs_diff": 0.0005606772742355904,
+  "micro_batches": 61,
+  "median_seconds_per_batch": 3.3680040749999876,
+  "max_seconds_per_batch": 11.430687227000007,
+  "model": "gbt"
+}

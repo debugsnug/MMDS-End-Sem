@@ -165,3 +165,28 @@ def compare_stream_to_batch(stream_scores: pd.DataFrame, batch_scores: pd.DataFr
     return {"n_stream": len(stream_scores), "n_batch": len(batch_scores), "n_compared": len(m),
             "max_abs_diff": float(d.max()) if len(d) else float("nan"),
             "mean_abs_diff": float(d.mean()) if len(d) else float("nan")}
+
+
+def evaluate_replay(scores: pd.DataFrame, truth: pd.DataFrame, top_mags: int = 5) -> Dict[str, object]:
+    """Honest summary of a replay, added in v2.
+
+    scores: event_id, score.  truth: event_id, y (hindsight label from the full catalog), magnitude.
+    A replay is a handful of events from ONE sequence, usually with a very high share of positives, so its average
+    precision is dominated by the base rate and is NOT a model validation. The summary therefore always reports the base
+    rate next to AP, flags the replay as uninformative when the base rate is above 0.5 or there are fewer than 20 events
+    of either class, and lists the scores of the largest events (the interesting cases).
+    """
+    from sklearn.metrics import average_precision_score, roc_auc_score
+    d = scores.merge(truth, on="event_id")
+    n, pos = len(d), int(d.y.sum())
+    out: Dict[str, object] = {"n_events": n, "n_positive": pos, "base_rate": float(d.y.mean()) if n else float("nan")}
+    both = d.y.nunique() == 2
+    out["average_precision"] = float(average_precision_score(d.y, d.score)) if both else float("nan")
+    out["roc_auc"] = float(roc_auc_score(d.y, d.score)) if both else float("nan")
+    out["informative"] = bool(both and 0.05 <= out["base_rate"] <= 0.5 and min(pos, n - pos) >= 20)
+    out["warning"] = None if out["informative"] else (
+        f"base rate {out['base_rate']:.2f} with {pos} positives of {n} events: AP mostly reflects the base rate; "
+        "this replay demonstrates the streaming mechanics, not predictive skill")
+    out["largest_events"] = (d.sort_values("magnitude", ascending=False).head(top_mags)[["event_id", "magnitude", "score", "y"]]
+                              .round(3).to_dict("records"))
+    return out

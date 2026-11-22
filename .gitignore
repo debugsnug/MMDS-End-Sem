@@ -1,37 +1,54 @@
-
-# Python cache
-__pycache__/
-*.py[cod]
-.pytest_cache/
-
-# Virtual environments
+# Python virtual environments
 .venv/
 venv/
 env/
+echo.
 
-# IDE files
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+echo.
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+echo.
+
+# Jupyter
+.ipynb_checkpoints/
+echo.
+
+# IDE and editor files
 .vscode/
 .idea/
+echo.
 
-# Environment variables and secrets
-.env
-.env.*
-!.env.example
-
-# Generated project outputs
-outputs/
-
-# Spark temporary files
-spark-warehouse/
-metastore_db/
-derby.log/
-
-# Logs and temporary files
-*.log
+# Operating system files
 .DS_Store
 Thumbs.db
+echo.
 
-# Personal documents - never upload
-/IEEE Report Humainzed.docx
-/IEEE Report.docx
-/Team 2.pptx
+# Temporary files and logs
+*.log
+*.tmp
+*.bak
+echo.
+
+# Spark temporary and metadata files
+*.crc
+_SUCCESS
+.metadata
+echo.
+
+# Streaming temporary data
+replay_tmp/
+checkpoint/
+
+# Legacy experiment outputs
+outputs/
+
+# Generated Spark data and model artifacts
+*.parquet
+**/models/

@@ -1,0 +1,366 @@
+{
+  "config": {
+    "catalog_csv": "/home/kiran/Documents/MMDS Project 2/dataset/usgs_earthquakes_historical.csv",
+    "work_dir": "/home/kiran/Documents/MMDS Project 2/local_run_v2",
+    "master": "local[*]",
+    "shuffle_partitions": 16,
+    "driver_memory": "8g",
+    "use_arrow": false,
+    "mc": 4.5,
+    "mainshock_min_mag": 6.0,
+    "nn_b": 1.0,
+    "nn_df": 1.6,
+    "nn_max_days": 365.0,
+    "nn_radius_scale": 3.0,
+    "nn_min_km": 0.1,
+    "nn_eta0_log10": -5.0,
+    "nn_estimate_eta0": true,
+    "nn_salt_buckets": 1,
+    "eta0_sweep": [
+      -7.0,
+      -6.0,
+      -5.5,
+      -5.0,
+      -4.5,
+      -4.0,
+      -3.0
+    ],
+    "zone_kinds": [
+      "kmeans",
+      "bisecting",
+      "gmm"
+    ],
+    "zone_k_candidates": [
+      10,
+      20,
+      40,
+      80
+    ],
+    "zone_k_tolerance": 0.002,
+    "silhouette_sample": 0.3,
+    "dbscan_eps_km": 50.0,
+    "dbscan_eps_days": 7.0,
+    "dbscan_min_samples": 5,
+    "trigger_min_mag": 4.5,
+    "label_horizon_days": 7.0,
+    "label_radius_km": 50.0,
+    "activity_radius_km": 100.0,
+    "activity_lookback_days": 30.0,
+    "cell_deg": 10.0,
+    "train_end": "2021-01-01",
+    "val_end": "2023-01-01",
+    "class_weights_sensitivity": true,
+    "baseline_runs": [
+      "S:lr"
+    ],
+    "bootstrap_unit": "cluster",
+    "bootstrap_block_days": 7.0,
+    "models": [
+      "lr",
+      "dt",
+      "rf",
+      "gbt"
+    ],
+    "feature_sets": [
+      "A",
+      "B",
+      "C"
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "grid_lr": [
+      0.001,
+      0.01,
+      0.1
+    ],
+    "grid_dt": [
+      4,
+      8,
+      12
+    ],
+    "grid_rf": [
+      8,
+      12
+    ],
+    "rf_num_trees": 100,
+    "grid_gbt": [
+      30,
+      60
+    ],
+    "gbt_max_depth": 5,
+    "n_boot": 1000,
+    "master_seed": 42,
+    "scale_fractions": [
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "scale_cores": [
+      1,
+      2,
+      4
+    ],
+    "scale_partitions": [
+      8,
+      32,
+      64
+    ],
+    "scale_salt": [
+      1,
+      8
+    ],
+    "scale_repeats": 3,
+    "scale_stress": [
+      4,
+      8
+    ],
+    "stress_factor": 1,
+    "replay_name": "ridgecrest_2019",
+    "tick_sim_hours": 3.0,
+    "tick_real_seconds": 0.5
+  },
+  "n_events_all": 2137900,
+  "n_events_mc": 112484,
+  "gk_mainshocks": 1603,
+  "gk_aftershocks_all_mags": 393797,
+  "eta0_log10": -5.4596257937708605,
+  "eta0_info": {
+    "n": 106421,
+    "method": "gmm",
+    "weights": [
+      0.3913050988538906,
+      0.6086949011461094
+    ],
+    "means": [
+      -7.153759699137445,
+      -3.7973933197243612
+    ],
+    "sds": [
+      1.376731916894265,
+      0.9319210125780926
+    ]
+  },
+  "nn_dependent": 39663,
+  "gk_aftershocks_mc": 36450,
+  "nn_dependent_mc": 39663,
+  "overlap_gk_vs_nn": {
+    "both": 23990,
+    "a_only": 12460,
+    "b_only": 15673,
+    "neither": 60361,
+    "jaccard": 0.4602574679124379,
+    "share_a": 0.3240460865545322,
+    "share_b": 0.35261014899896875,
+    "ari_partitions": 0.3349580282940109
+  },
+  "bath": {
+    "gk": {
+      "n_clusters": 1100,
+      "mean_delta": 0.8978999999999999,
+      "median_delta": 0.8999999999999995
+    },
+    "nn": {
+      "n_clusters": 1286,
+      "mean_delta": 0.7018818040435459,
+      "median_delta": 0.5999999999999996
+    }
+  },
+  "omori": {
+    "gk": {
+      "median_p": 0.9191355540065258,
+      "n_fitted": 20
+    },
+    "nn": {
+      "median_p": 0.9794485751466024,
+      "n_fitted": 20
+    }
+  },
+  "bath_strata": {
+    "gk": [
+      {
+        "mainshock_min_mag": "all",
+        "n_clusters": 1100,
+        "mean_delta": 0.8978999999999998,
+        "median_delta": 0.8999999999999995
+      },
+      {
+        "mainshock_min_mag": ">= 5",
+        "n_clusters": 1100,
+        "mean_delta": 0.8978999999999998,
+        "median_delta": 0.8999999999999995
+      },
+      {
+        "mainshock_min_mag": ">= 6",
+        "n_clusters": 1100,
+        "mean_delta": 0.8978999999999998,
+        "median_delta": 0.8999999999999995
+      },
+      {
+        "mainshock_min_mag": ">= 7",
+        "n_clusters": 189,
+        "mean_delta": 1.2887301587301587,
+        "median_delta": 1.2999999999999998
+      }
+    ],
+    "nn": [
+      {
+        "mainshock_min_mag": "all",
+        "n_clusters": 1286,
+        "mean_delta": 0.7018818040435458,
+        "median_delta": 0.5999999999999996
+      },
+      {
+        "mainshock_min_mag": ">= 5",
+        "n_clusters": 1224,
+        "mean_delta": 0.7329411764705882,
+        "median_delta": 0.6000000000000005
+      },
+      {
+        "mainshock_min_mag": ">= 6",
+        "n_clusters": 616,
+        "mean_delta": 1.0682792207792207,
+        "median_delta": 1.0999999999999996
+      },
+      {
+        "mainshock_min_mag": ">= 7",
+        "n_clusters": 167,
+        "mean_delta": 1.359820359281437,
+        "median_delta": 1.3999999999999995
+      }
+    ]
+  },
+  "dispersion": [
+    {
+      "region": "global",
+      "catalog": "raw",
+      "n": 112484,
+      "dispersion_index": 10.644067903555413,
+      "cv_interevent": 1.1877885885414887,
+      "low_n": false
+    },
+    {
+      "region": "global",
+      "catalog": "gk_declustered",
+      "n": 76034,
+      "dispersion_index": 2.5288249008103567,
+      "cv_interevent": 1.110217353154674,
+      "low_n": false
+    },
+    {
+      "region": "global",
+      "catalog": "nn_declustered",
+      "n": 72821,
+      "dispersion_index": 1.0729393929316564,
+      "cv_interevent": 1.017975971903332,
+      "low_n": false
+    },
+    {
+      "region": "socal",
+      "catalog": "raw",
+      "n": 119,
+      "dispersion_index": 7.197463977127433,
+      "cv_interevent": 2.404946627606216,
+      "low_n": false
+    },
+    {
+      "region": "socal",
+      "catalog": "gk_declustered",
+      "n": 48,
+      "dispersion_index": 1.4912544668045893,
+      "cv_interevent": 1.499721407374622,
+      "low_n": true
+    },
+    {
+      "region": "socal",
+      "catalog": "nn_declustered",
+      "n": 45,
+      "dispersion_index": 0.9917246567613313,
+      "cv_interevent": 1.258962793605372,
+      "low_n": true
+    }
+  ],
+  "case_studies": [
+    {
+      "preset": "ridgecrest_2019",
+      "title": "2019 Ridgecrest, California",
+      "n_events": 40,
+      "largest_mag": 7.1,
+      "gk_cluster_size": 30,
+      "nn_cluster_size": 36,
+      "member_jaccard": 0.8333333333333334,
+      "gk_aftershocks_in_window": 34,
+      "nn_dependent_in_window": 37
+    },
+    {
+      "preset": "tohoku_2011",
+      "title": "2011 Tohoku, Japan",
+      "n_events": 3050,
+      "largest_mag": 9.1,
+      "gk_cluster_size": 948,
+      "nn_cluster_size": 2983,
+      "member_jaccard": 0.31780087160576603,
+      "gk_aftershocks_in_window": 2651,
+      "nn_dependent_in_window": 3003
+    },
+    {
+      "preset": "maule_2010",
+      "title": "2010 Maule, Chile",
+      "n_events": 1128,
+      "largest_mag": 8.8,
+      "gk_cluster_size": 366,
+      "nn_cluster_size": 1071,
+      "member_jaccard": 0.34173669467787116,
+      "gk_aftershocks_in_window": 775,
+      "nn_dependent_in_window": 1081
+    }
+  ],
+  "gk_mc_variant": {
+    "overlap": {
+      "both": 35253,
+      "a_only": 27931,
+      "b_only": 4410,
+      "neither": 44890,
+      "jaccard": 0.5215403734059236,
+      "share_a": 0.5617154439742541,
+      "share_b": 0.35261014899896875,
+      "ari_partitions": 0.3458172173691603,
+      "gk_mainshocks": 49300
+    },
+    "bath_strata": [
+      {
+        "mainshock_min_mag": "all",
+        "n_clusters": 2821,
+        "mean_delta": 0.5786529599432826,
+        "median_delta": 0.5
+      },
+      {
+        "mainshock_min_mag": ">= 5",
+        "n_clusters": 2677,
+        "mean_delta": 0.6012999626447515,
+        "median_delta": 0.5
+      },
+      {
+        "mainshock_min_mag": ">= 6",
+        "n_clusters": 1100,
+        "mean_delta": 0.8978999999999998,
+        "median_delta": 0.8999999999999995
+      },
+      {
+        "mainshock_min_mag": ">= 7",
+        "n_clusters": 189,
+        "mean_delta": 1.2887301587301587,
+        "median_delta": 1.2999999999999998
+      }
+    ]
+  },
+  "timings_seconds": {
+    "gk": 8.059204115000057,
+    "nn_total": 36.231510455000034,
+    "zones": 303.76173124799993,
+    "gk_mc_variant": 417.233548984
+  }
+}

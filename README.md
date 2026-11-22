@@ -1,134 +1,351 @@
-# Scalable Clustering and Classification of Seismic Sequences with Spark
+# Scalable Clustering and Classification of Seismic Sequences on the USGS Earthquake Catalog Using Apache Spark
 
-Implementation of the end-semester plan (MMDS). Same USGS catalog as Assignment 2 (2,145,525 events, 2010–2024).
+## 1. Project Overview
 
-* **Part A (clustering):** Gardner–Knopoff (G-K) baseline vs nearest-neighbour clustering (Zaliapin–Ben-Zion) in Spark, MLlib zone models (KMeans / BisectingKMeans / GMM), optional single-machine DBSCAN reference. No ground truth exists, so evaluation = overlap with G-K, ARI, Båth's law, Omori decay, Poisson-likeness of the background, η₀ sensitivity, case studies.
-* **Part B (classification, MLlib):** does adding cluster-derived features help predict "a strictly larger event within 7 days and 50 km"? Four classifiers (LR, DT, RF, GBT) × feature sets A/B/C, time-based split, validation-only tuning, paired bootstrap.
-* **Scalability and streaming:** catalog-size / cores / partitions / salting / skew experiments; Structured Streaming scoring of a replayed sequence with the saved `PipelineModel`.
+This project investigates large-scale earthquake sequence analysis using Apache Spark, statistical methods, clustering algorithms, and machine learning.
 
-This is statistical classification on a catalog. It makes **no earthquake-forecasting claim**.
+Using the historical USGS earthquake catalog, the project implements earthquake sequence identification, declustering, subsequent-event classification, scalability benchmarking, streaming evaluation, and historical case-study reanalysis.
 
-## Assumptions (correct these first)
+The dataset contains **2,145,569 raw earthquake records** covering 2010–2024. After removing 7,669 records without magnitude values, **2,137,900 events** remain for analysis.
 
-| # | Assumption | Where to change |
-|---|---|---|
-| A1 | Input is the Assignment 2 USGS CSV with columns `time, latitude, longitude, depth, mag, id, place, type` | `catalog_csv` |
-| A2 | Runs in Colab/local mode with Drive for storage; Java 8/11/17/21, PySpark 3.5.1, pandas < 3 | `requirements.txt` |
-| A3 | Clustering catalog and Part B triggers use **M ≥ 4.5** (global completeness) | `mc`, `trigger_min_mag` |
-| A4 | Label: strictly larger event within **7 days and 50 km** (frozen after the label audit, before modelling) | `label_horizon_days`, `label_radius_km` |
-| A5 | Split: train < 2021-01-01, validation 2021–2022, test 2023-01-01 → end; the 7 days before each boundary and the last 7 days are dropped | `train_end`, `val_end` |
-| A6 | NN search box: parents ≤ 365 days earlier and within 3 × the G-K radius of the parent; events with no parent in the box are background | `nn_max_days`, `nn_radius_scale` |
-| A7 | NN parameters b = 1.0, d_f = 1.6; η₀ estimated with a 2-component MLlib GMM on log₁₀η, fallback −5.0 | `nn_b`, `nn_df`, `nn_eta0_log10` |
-| A8 | "Dependent event" (NN) = event with a parent below η₀; compared with G-K "aftershock", both restricted to M ≥ mc | `evaluation.py` |
-| A9 | Local activity features count earlier M ≥ mc events within 100 km over 24 h / 7 d / 30 d | `activity_*` |
-| A10 | Primary metric: PR-AUC as average precision on collected test scores; Spark `areaUnderPR` is logged as a cross-check; chance level = test base rate | `modeling.py` |
-| A11 | Primary comparison: set C vs set B with the classifier that is best on validation for set B; bootstrap over test events (1000 replicates) | `n_boot` |
-| A12 | Seeds 1–3 for the stochastic models (RF, GBT); LR/DT are deterministic and run once | `seeds` |
-| A13 | Arrow transfer is **off** (it breaks on Java 21); turn on with `use_arrow=true` on Java 8/11/17 for faster `toPandas` | `use_arrow` |
+### Project Components
 
-## Layout
+- **Part A – Clustering and Declustering:** Comparison of the Gardner–Knopoff (G–K) method and nearest-neighbour earthquake declustering.
+- **Part B – Classification:** Machine-learning models for classifying subsequent larger-event occurrence.
+- **Part C – Scalability:** Performance evaluation across different core counts, dataset sizes, partition configurations, and synthetic workloads.
+- **Part D – Streaming:** Micro-batch streaming evaluation and comparison with batch scoring.
+- **Part E – Reanalysis:** Historical earthquake sequence case studies.
 
-```
-MMDS/
-├── README.md, requirements.txt, pytest.ini
-├── config/default.json        real run (Colab/Drive paths)
-├── config/demo.json           synthetic smoke run (/tmp paths, tiny grids)
-├── src/seismic/
-│   ├── config.py              every tunable (Config dataclass, JSON + --set overrides, replay presets)
-│   ├── common.py              Spark session, StageTimer
-│   ├── geo.py                 haversine, G-K formulas, grid chooser (numpy + Spark column versions)
-│   ├── data.py                CSV cleaning (Assignment 2 rules), parquet IO, audit, stress-test replication
-│   ├── gk.py                  Gardner–Knopoff baseline (Assignment 2 logic) + label table
-│   ├── blocking.py            3-D cell + time-bucket blocked join, salting, skew helper
-│   ├── nn_cluster.py          nearest-neighbour search, η₀ estimation, pointer-jumping cluster roots
-│   ├── zones.py               MLlib KMeans/Bisecting/GMM on the unit sphere
-│   ├── evaluation.py          overlap, ARI, Båth, Omori MLE, dispersion, η₀ sensitivity, case studies
-│   ├── dbscan_ref.py          optional single-machine space-time DBSCAN
-│   ├── features.py            label, causal features A/B/C, time split
-│   ├── modeling.py            pipelines, tuning, scoring, bootstrap, resumable orchestration
-│   ├── runlog.py              resumable CSV run log
-│   ├── scalability.py         timed runs, experiment plan, skew report
-│   ├── streaming.py           stream state, scorer, file-stream replay, batch comparison
-│   └── synthetic.py           synthetic catalog with planted sequences (tests / demo only)
+## 2. Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python | Core implementation |
+| Apache Spark / PySpark | Distributed data processing |
+| NumPy | Numerical computation |
+| Pandas | Data manipulation |
+| SciPy | Scientific computing |
+| Scikit-learn | Machine learning and clustering |
+| Matplotlib | Visualization |
+| Pytest | Automated testing |
+
+### Validated Environment
+
+The implementation was tested using:
+
+| Component | Version |
+|---|---|
+| Operating System | Ubuntu |
+| Python | 3.10.12 |
+| Java | OpenJDK 17.0.19 |
+| PySpark | 3.5.1 |
+| NumPy | 2.2.6 |
+| Pandas | 2.3.3 |
+| Scikit-learn | 1.7.2 |
+| SciPy | 1.15.3 |
+| Pytest | 9.2.0 |
+
+Dependency specifications are available in `requirements.txt`.
+
+## 3. Project Structure
+
+```text
+MMDS Project 2/
+│
+├── config/
+│   ├── default.json
+│   ├── causal.json
+│   ├── k40.json
+│   └── demo.json
+│
+├── dataset/
+│   └── usgs_earthquakes_historical.csv
+│
 ├── scripts/
-│   ├── 00_prepare_data.py     CSV → parquet + audit
+│   ├── 00_prepare_data.py
 │   ├── 01_part_a_clustering.py
 │   ├── 02_part_b_classification.py
 │   ├── 03_scalability.py
 │   ├── 04_streaming_scoring.py
-│   └── make_demo_data.py      synthetic USGS-format CSV
-└── tests/                     pytest suite (see "Verification")
+│   └── 05_reanalysis.py
+│
+├── src/
+│   └── seismic/
+│       └── Core implementation modules
+│
+├── tests/
+│   └── Automated test suite
+│
+├── reference_results/
+│   └── Retained reference experiment outputs
+│
+├── main_experiment/
+│   └── Main experiment outputs
+│
+├── causal_experiment/
+│   └── Causal G–K experiment outputs
+│
+├── cluster_sensitivity_k40/
+│   └── Controlled k=40 experiment outputs
+│
+├── CHANGES.md
+├── README.md
+├── requirements.txt
+└── pytest.ini
 ```
 
-## Run order (Colab)
+The experiment directories contain saved outputs from the corresponding runs. `reference_results/` retains reference outputs and should not be confused with the latest main experiment results.
 
-```python
-from google.colab import drive; drive.mount('/content/drive')
-!pip -q install -r seismic_spark/requirements.txt      # Colab already has Java; restart runtime if pandas changes
-%cd seismic_spark
-!python scripts/00_prepare_data.py          --config config/default.json
-!python scripts/01_part_a_clustering.py     --config config/default.json --dbscan
-!python scripts/02_part_b_classification.py --config config/default.json
-!python scripts/03_scalability.py           --config config/default.json
-!python scripts/04_streaming_scoring.py     --config config/default.json
-```
+## 4. Environment Setup
 
-Override anything without editing files, e.g. `--set mc=4.0 --set 'models=["lr","rf"]' --set seeds=[1]`.
-All outputs go to `<work_dir>/{part_a,part_b,scalability,streaming}/`. Part B and scalability are **resumable**: re-running skips logged runs.
-If you change `mc`, `trigger_min_mag`, label or feature settings, delete `<work_dir>/part_b/` first (the feature table is cached).
+Run all commands from the project root directory.
 
-**Smoke run without the real data (≈ 10 min on 2 cores):**
+### Step 1 – Create a Virtual Environment
 
 ```bash
-python scripts/make_demo_data.py
-for s in 00_prepare_data 01_part_a_clustering 02_part_b_classification 03_scalability 04_streaming_scoring; do
-  python scripts/$s.py --config config/demo.json; done
+python3 -m venv .venv
+source .venv/bin/activate
 ```
-Demo numbers come from synthetic data and mean nothing scientifically; the run only proves the code path.
 
-## How each plan item is implemented
-
-| Plan item | Code |
-|---|---|
-| G-K baseline reused | `gk.py` (mainshock selection and grid-blocked join unchanged from Assignment 2) |
-| Nearest-neighbour clustering reusing a blocked join | `blocking.py` + `nn_cluster.py` — **same idea, different blocking**: event-to-event search needs time as well as space, and a lat/lon grid distorts near the poles, so cells are cubes of the unit-sphere embedding plus time buckets. The G-K join keeps the Assignment 2 lat/lon grid |
-| MLlib KMeans / Bisecting / GMM zones (unit-sphere coords) | `zones.py`, `compare_zone_models` |
-| DBSCAN single-machine reference, labelled "not distributed" | `dbscan_ref.py`, `--dbscan` |
-| Overlap (Jaccard, ARI), Båth, Omori, Poisson check, sensitivity, case studies | `evaluation.py`, `01_part_a_clustering.py` |
-| Label frozen after audit; time split with gaps | `features.py`, `02_part_b_classification.py` (`label_audit.json`) |
-| Causal features A/B/C | `features.build_feature_table` |
-| Zone KMeans fitted on training rows only, k chosen on validation | `modeling.select_zone_k`, `run_part_b` |
-| 4 classifiers, same grid per set, manual time-aware tuning | `modeling.py` (`tune`) |
-| PR-AUC vs base rate, ROC-AUC, P/R/F1/confusion at validation threshold | `modeling.rank_metrics`, `metrics_at` |
-| Paired bootstrap C vs B; "interval includes zero ⇒ no clear difference" | `modeling.paired_bootstrap_diff` |
-| Class-weight sensitivity | `run_part_b` (`weightCol`) |
-| Size / cores / partitions / skew / salting / pair reduction | `scalability.py`, `03_scalability.py` |
-| Replicated-data stress test, clearly labelled | `data.replicate_catalog`, `--set stress_factor=N` |
-| Streaming scoring with saved `PipelineModel`; stream vs batch | `streaming.py`, `04_streaming_scoring.py` |
-| Resumable CSV log of every run | `runlog.py` |
-
-## Verification
+### Step 2 – Install Dependencies
 
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-python -m pytest                     # whole suite (≈ 10–15 min on 1–2 cores; Spark start-up dominates)
-python -m pytest -m "not slow"       # skips the real file-stream replay
 ```
 
-| Test file | What it proves |
+### Step 3 – Verify the Environment
+
+```bash
+python --version
+java -version
+python -c "import pyspark; print(pyspark.__version__)"
+```
+
+Ensure Java is available before executing the Spark pipeline.
+
+## 5. Dataset
+
+The project uses the historical USGS earthquake catalog.
+
+Expected dataset location:
+
+```text
+dataset/usgs_earthquakes_historical.csv
+```
+
+Dataset statistics:
+
+| Description | Count |
+|---|---:|
+| Raw records | 2,145,569 |
+| Records without magnitude | 7,669 |
+| Processed earthquake events | 2,137,900 |
+| Time period | 2010–2024 |
+
+The configuration files use paths relative to the project root rather than machine-specific paths.
+
+### Configuration Files
+
+| Configuration | Description |
 |---|---|
-| `test_clustering_core.py` | Blocked NN equals an O(n²) brute-force reference (with and without salting, incl. antimeridian and polar events); blocking prunes pairs; G-K blocked = unblocked; planted sequences are recovered (ARI > 0.7); pointer jumping resolves a 200-deep chain; η₀ estimate separates two modes |
-| `test_zones_eval.py` | Zones treat longitude ±180 as one place; zone assignment never re-fits; ARI equals scikit-learn; Båth ignores foreshocks; Omori MLE recovers p; dispersion ≈ 1 for Poisson and > 1 for clustered; **declustering lowers the dispersion index**; η₀ sensitivity is monotone; DBSCAN reference finds planted sequences |
-| `test_features_modeling.py` | Labels and activity features equal brute force; **features are causal** (deleting future events changes nothing, incl. NN and G-K flag); split has gaps and is disjoint; bootstrap detects a real gain and reports "includes zero" for noise; full Part B run, class-weight runs, aligned score files, and **resume produces identical results without refitting** |
-| `test_scalability_streaming.py` | Time-window fractions are nested; pair reduction and skew are reported; salting does not change results; stress replication does not mix copies; incremental stream state finds the same mainshocks as batch G-K; **streaming scores equal batch scores (max diff < 1e-9)**; real Structured Streaming file replay |
+| `config/default.json` | Main experiment configuration |
+| `config/causal.json` | Causal G–K experiment configuration |
+| `config/k40.json` | Controlled k=40 sensitivity experiment |
+| `config/demo.json` | Demonstration configuration |
 
-## Known limitations (state these in the report)
+## 6. Execution Instructions
 
-* **No ground truth** for aftershock labels. Agreement with G-K is not accuracy; the physical checks show plausibility only.
-* **Search-box truncation** in the NN method (A6) is the one approximation; blocking itself is exact (tested against brute force). Parents further than the box are not found, so those events count as background.
-* **η₀** matters: the sensitivity sweep and the GMM estimate are reported; a fixed value is a choice, not a fact.
-* **G-K window sizes** (up to ~925 days for the largest events) are generous, which motivated this project; do not over-claim that clustering is "right".
-* **Part B is hard**: foreshock-style identification is known to be difficult. A small gain or no gain is a valid finding. Judge PR-AUC against the base rate printed with every result.
-* **Streaming vs batch agreement is a consistency check** (shared feature code), not independent validation of the model.
-* **Local mode** only: speed-up is capped by the machine's cores, and nothing here says how a real cluster would behave. ~2M rows is large but not huge; the optional stress test is runtime-only.
-* Zones from k-means are descriptive (fault zones are elongated).
+Activate the virtual environment and execute the following commands from the project root.
+
+### Step 1 – Data Preparation
+
+```bash
+python scripts/00_prepare_data.py --config config/default.json
+```
+
+### Step 2 – Part A: Clustering and Declustering
+
+```bash
+python scripts/01_part_a_clustering.py --config config/default.json
+```
+
+### Step 3 – Part B: Classification
+
+```bash
+python scripts/02_part_b_classification.py --config config/default.json
+```
+
+The current implementation uses chronological, causal G–K mainshock selection.
+
+### Step 4 – Part C: Scalability Evaluation
+
+```bash
+python scripts/03_scalability.py --config config/default.json
+```
+
+### Step 5 – Part D: Streaming Evaluation
+
+```bash
+python scripts/04_streaming_scoring.py --config config/default.json --preset tohoku_2011
+```
+
+### Step 6 – Part E: Historical Reanalysis
+
+```bash
+python scripts/05_reanalysis.py --config config/default.json
+```
+
+### Optional – Controlled k=40 Experiment
+
+```bash
+python scripts/02_part_b_classification.py --config config/k40.json
+```
+
+Experiment outputs are saved under the working directory specified in the selected configuration.
+
+## 7. Experimental Results
+
+### Part A – Clustering and Declustering
+
+For the earthquake subset with magnitude **M ≥ 4.5**, the following results were obtained:
+
+| Metric | G–K | Nearest Neighbour |
+|---|---:|---:|
+| Dependent events | 36,450 | 39,663 |
+| Percentage of catalog subset | 32.40% | 35.26% |
+| Dispersion statistic | 2.5288 | 1.0729 |
+
+The raw catalog dispersion statistic was **10.6441**.
+
+Additional analyses include:
+
+- Event overlap and Jaccard similarity
+- Adjusted Rand Index (ARI)
+- Båth's law analysis
+- Omori-law analysis
+- Nearest-neighbour eta sensitivity
+- Spatial clustering
+- Ridgecrest (2019), Tohoku (2011), and Maule (2010) case studies
+
+The two declustering approaches use different definitions of dependent events. Their results should therefore be interpreted with these methodological differences and magnitude thresholds in mind.
+
+### Part B – Subsequent-Event Classification
+
+The classification target identifies whether a strictly larger earthquake occurs within **7 days and 50 km** of an event.
+
+This is a subsequent-event classification task, not a validated earthquake foreshock-prediction system.
+
+The main experiment produced the following average precision scores:
+
+| Feature Configuration | Average Precision |
+|---|---:|
+| A | 0.3301 |
+| B | 0.7939 |
+| C | 0.7972 |
+
+Local activity information accounts for the largest improvement in classification performance.
+
+The incremental improvement from configuration B to C was approximately **0.00335**. Its cluster-bootstrap 95% confidence interval was approximately **[0.00047, 0.00631]** in the main experiment.
+
+The controlled k=40 experiment showed that this incremental improvement was sensitive to the spatial clustering configuration.
+
+### Part C – Scalability Evaluation
+
+For the 112,484-event scalability workload:
+
+| Number of Cores | Median Runtime |
+|---:|---:|
+| 1 | 13.44 seconds |
+| 2 | 10.62 seconds |
+| 4 | 9.19 seconds |
+
+Larger synthetic workloads were also evaluated:
+
+| Workload | Events | Runtime |
+|---|---:|---:|
+| 4× | 449,936 | 18.81 seconds |
+| 8× | 899,872 | 35.36 seconds |
+
+Additional experiments examined catalog-size scaling, partition counts, and data salting.
+
+Runtime measurements are environment-dependent and were calculated using repeated runs.
+
+### Part D – Streaming Evaluation
+
+The Tohoku 2011 replay processed **1,322 events** across **61 micro-batches**.
+
+| Metric | Result |
+|---|---:|
+| Events processed | 1,322 |
+| Micro-batches | 61 |
+| Median micro-batch runtime | 2.326 seconds |
+| Maximum micro-batch runtime | 4.899 seconds |
+| Maximum absolute batch-versus-stream score difference | 0 |
+
+Batch and streaming event counts matched, and the maximum absolute score difference was zero.
+
+The replay had a high positive-label rate. Therefore, this experiment demonstrates streaming execution and batch-versus-stream consistency rather than general predictive quality.
+
+### Part E – Historical Reanalysis
+
+Historical earthquake sequences were reanalysed using the implemented clustering and classification workflow.
+
+The case studies include:
+
+- Ridgecrest, 2019
+- Tohoku, 2011
+- Maule, 2010
+
+These case studies provide additional context for examining earthquake sequence behaviour and the differences between declustering methods.
+
+## 8. Causal G–K Implementation
+
+The G–K implementation was extended with chronological, causal mainshock selection.
+
+The causal procedure processes events chronologically and considers active earlier mainshocks instead of selecting mainshocks retrospectively based on later events.
+
+The Part B classification script was updated to use this implementation.
+
+Validation compared the causal and earlier implementations on the evaluated catalog:
+
+- G–K event flags were identical.
+- Complete feature tables were identical.
+- Classification metrics remained unchanged.
+
+Further implementation details are documented in `CHANGES.md`.
+
+## 9. Testing and Validation
+
+The project includes an automated test suite.
+
+Run all tests using:
+
+```bash
+python -m pytest -v
+```
+
+**Validation result: 52 tests passed.**
+
+Additional validation covered:
+
+- Spark execution and environment checks
+- Dataset preparation
+- Feature generation
+- Clustering and classification
+- Causal G–K output comparison
+- Streaming-versus-batch consistency
+
+## 10. Reproducibility Notes
+
+- Execute commands from the project root directory.
+- Ensure the dataset is available at the configured path.
+- Use the validated Python, Java, and PySpark environment where possible.
+- Configuration files control experiment parameters and output directories.
+- Experimental outputs from different configurations should not be treated as directly interchangeable.
+- Runtime measurements may vary with hardware and system load.
+- The classification target represents subsequent larger-event occurrence within a defined space-time window; it does not establish earthquake predictability.
+
+---
+
+**Project:** Scalable Clustering and Classification of Seismic Sequences on the USGS Earthquake Catalog Using Apache Spark

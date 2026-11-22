@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from pyspark.sql import functions as F                              # noqa: E402
 
+from seismic import diagnostics as dg                                # noqa: E402
 from seismic import evaluation as ev_                                # noqa: E402
 from seismic import gk, zones                                        # noqa: E402
 from seismic.common import StageTimer, banner, get_spark            # noqa: E402
@@ -34,6 +35,8 @@ SOCAL_BBOX = (32.0, 37.0, -121.0, -114.0)
 def main() -> None:
     ap = add_common_args(argparse.ArgumentParser(description=__doc__))
     ap.add_argument("--dbscan", action="store_true", help="also run the single-machine DBSCAN reference")
+    ap.add_argument("--gk-mc-variant", action="store_true",
+                    help="also run G-K with mainshocks of M >= mc on the M >= mc catalog (like-for-like with NN; slow: O(n^2) on ~1e5 candidates)")
     args = ap.parse_args()
     cfg = cfg_from_args(args)
     out = os.path.join(cfg.work_dir, "part_a")
@@ -62,6 +65,12 @@ def main() -> None:
         summary["eta0_log10"], summary["eta0_info"] = eta0, eta_info
         summary["nn_dependent"] = nn_lab.filter("nn_is_dependent").count()
     print(f"eta0 (log10) = {eta0:.2f} via {eta_info.get('method')}; dependent events: {summary['nn_dependent']:,}")
+    # v2: like-for-like labels. G-K was run on ALL magnitudes (393,797 aftershocks); NN only sees M >= mc. Never compare the
+    # two raw counts: restrict G-K to the same M >= mc events first.
+    summary["gk_aftershocks_mc"] = gk_mc.filter("gk_is_aftershock").count()
+    summary["nn_dependent_mc"] = summary["nn_dependent"]
+    print(f"like-for-like on M >= {cfg.mc}: G-K {summary['gk_aftershocks_mc']:,} vs NN {summary['nn_dependent_mc']:,} "
+          f"(G-K on all magnitudes: {summary['gk_aftershocks_all_mags']:,}, not comparable)")
 
     labels = (ev_mc.select("event_id", "event_time", "t_sec", "latitude", "longitude", "magnitude")
                    .join(gk_mc.select("event_id", "gk_is_aftershock", "gk_cluster"), "event_id")
@@ -87,6 +96,16 @@ def main() -> None:
         om.to_csv(os.path.join(out, f"omori_{name}.csv"), index=False)
         omori[name] = {"median_p": float(om.p.median()), "n_fitted": int(om.p.notna().sum())}
     summary["bath"], summary["omori"] = bath, omori
+    # v2: Bath's law stratified by mainshock magnitude. The pooled mean is biased low for small mainshocks (an M4.5 catalog
+    # cannot show a gap above 0.5 for an M5 mainshock), so methods must be compared on the same strata.
+    lab_pd = labels.select("event_id", "t_sec", "magnitude", "gk_cluster", "nn_cluster").toPandas()
+    strata = {}
+    for name, col in (("gk", "gk_cluster"), ("nn", "nn_cluster")):
+        t = dg.bath_strata(lab_pd, col)
+        t.to_csv(os.path.join(out, f"bath_strata_{name}.csv"), index=False)
+        strata[name] = t.to_dict("records")
+    summary["bath_strata"] = strata
+    print("Bath by mainshock magnitude:"); print(pd.concat({k: pd.DataFrame(v) for k, v in strata.items()}).to_string())
     print(json.dumps({"bath": bath, "omori": omori}, indent=2))
 
     banner("Poisson-likeness of the background")
@@ -96,6 +115,7 @@ def main() -> None:
                          ("nn_declustered", labels.filter(~F.col("nn_is_dependent")))):
             rows.append({"region": region, "catalog": name, **ev_.dispersion_stats(df, bin_days=1.0, bbox=bbox)})
     disp = pd.DataFrame(rows)
+    disp["low_n"] = disp.n < 100          # dispersion / CV of fewer than ~100 events are too noisy to interpret
     disp.to_csv(os.path.join(out, "dispersion.csv"), index=False)
     summary["dispersion"] = disp.to_dict("records")
     print(disp.to_string(index=False))
@@ -141,6 +161,21 @@ def main() -> None:
         summary["dbscan_reference"] = {"dependent": int(a.sum()), "jaccard_vs_gk": jac(a, b), "jaccard_vs_nn": jac(a, c)}
         print(summary["dbscan_reference"])
 
+    if args.gk_mc_variant:
+        banner("G-K variant with mainshocks of M >= mc (like-for-like with NN)")
+        with timer.stage("gk_mc_variant"):
+            ms2, after2, _ = gk.run_gk(spark, ev_mc, cfg.mc)
+            gk2 = gk.gk_label_table(ev_mc, after2).select("event_id", F.col("gk_is_aftershock").alias("gk2_is_aftershock"),
+                                                         F.col("gk_cluster").alias("gk2_cluster"))
+            both2 = labels.join(gk2, "event_id").persist()
+            ov2 = ev_.flag_overlap(both2, "gk2_is_aftershock", "nn_is_dependent")
+            ov2["ari_partitions"] = ev_.adjusted_rand_index(both2, "gk2_cluster", "nn_cluster")
+            ov2["gk_mainshocks"] = ms2.count()
+            pd.DataFrame([ov2]).to_csv(os.path.join(out, "overlap_gk_mc_variant.csv"), index=False)
+            l2 = both2.select("event_id", "t_sec", "magnitude", "gk2_cluster").toPandas()
+            t2 = dg.bath_strata(l2, "gk2_cluster"); t2.to_csv(os.path.join(out, "bath_strata_gk_mc_variant.csv"), index=False)
+            summary["gk_mc_variant"] = {"overlap": ov2, "bath_strata": t2.to_dict("records")}
+            print(json.dumps(ov2, indent=2)); print(t2.to_string(index=False))
     summary["timings_seconds"] = timer.seconds
     _charts(out, nn, eta0, labels, sens)
     with open(os.path.join(out, "part_a_summary.json"), "w") as f:

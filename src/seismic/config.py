@@ -12,21 +12,13 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..")
-)
 
 @dataclass
 class Config:
     # ---------------- paths ----------------
     # Assumption A1: the Assignment 2 CSV (USGS ComCat export) is reused unchanged.
-    catalog_csv: str = os.path.join(
-        PROJECT_ROOT, "dataset", "usgs_earthquakes_historical.csv"
-    )
-    
-    work_dir: str = os.path.join(
-        PROJECT_ROOT, "outputs", "real_run"
-    )
+    catalog_csv: str = "dataset/usgs_earthquakes_historical.csv"
+    work_dir: str = "main_experiment"
 
     # ---------------- Spark ----------------
     master: str = "local[*]"
@@ -51,7 +43,10 @@ class Config:
 
     # ---------------- zones (MLlib clustering on the unit sphere) ----------------
     zone_kinds: List[str] = field(default_factory=lambda: ["kmeans", "bisecting", "gmm"])
-    zone_k_candidates: List[int] = field(default_factory=lambda: [10, 20, 40])
+    # v2: grid extended with 80 so the chosen k is not at the edge; ties within `zone_k_tolerance`
+    # validation PR-AUC go to the smaller k (differences of ~0.005 are within noise)
+    zone_k_candidates: List[int] = field(default_factory=lambda: [10, 20, 40, 80])
+    zone_k_tolerance: float = 0.002
     silhouette_sample: float = 0.3
 
     # ---------------- DBSCAN single-machine reference (optional) ----------------
@@ -69,6 +64,9 @@ class Config:
     train_end: str = "2021-01-01"      # train: [catalog start, train_end)
     val_end: str = "2023-01-01"        # validation: [train_end, val_end); test: [val_end, end]
     class_weights_sensitivity: bool = True
+    baseline_runs: List[str] = field(default_factory=lambda: ["S:lr"])   # v2: simple reference models "set:model"
+    bootstrap_unit: str = "cluster"    # v2: "cluster" resamples whole NN clusters (events in a sequence are not independent)
+    bootstrap_block_days: float = 7.0  # fallback when no cluster ids are available: resample calendar blocks
 
     # ---------------- models ----------------
     models: List[str] = field(default_factory=lambda: ["lr", "dt", "rf", "gbt"])
@@ -88,7 +86,9 @@ class Config:
     scale_cores: List[int] = field(default_factory=lambda: [1, 2, 4])
     scale_partitions: List[int] = field(default_factory=lambda: [8, 32, 64])
     scale_salt: List[int] = field(default_factory=lambda: [1, 8])
-    stress_factor: int = 1             # >1 replicates the catalog (systems stress test only)
+    scale_repeats: int = 3             # v2: every configuration is timed this many times (median reported)
+    scale_stress: List[int] = field(default_factory=lambda: [4, 8])   # v2: replicated-catalog runtimes (full catalog x k)
+    stress_factor: int = 1             # >1 replicates the catalog for the WHOLE script (systems stress test only)
 
     # ---------------- streaming / case studies ----------------
     replay_name: str = "ridgecrest_2019"
@@ -107,7 +107,26 @@ class Config:
         unknown = set(data) - known
         if unknown:
             raise KeyError(f"Unknown config keys: {sorted(unknown)}")
-        return cls(**data)
+
+        cfg = cls(**data)
+
+        # Resolve relative paths from the project root.
+        if path:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+        else:
+            project_root = os.getcwd()
+
+        if not os.path.isabs(cfg.catalog_csv):
+            cfg.catalog_csv = os.path.abspath(
+                os.path.join(project_root, cfg.catalog_csv)
+            )
+
+        if not os.path.isabs(cfg.work_dir):
+            cfg.work_dir = os.path.abspath(
+                os.path.join(project_root, cfg.work_dir)
+            )
+
+        return cfg
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)

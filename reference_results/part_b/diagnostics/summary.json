@@ -1,0 +1,14 @@
+{
+  "split_sizes": {
+    "train": 81589,
+    "val": 16582,
+    "test": 13919,
+    "test_base_rate": 0.23155399094762555
+  },
+  "concentration_test": {
+    "top": 5,
+    "share_of_positives": 0.3174061433447099,
+    "share_of_events": 0.08865579423809182,
+    "n_groups": 9449
+  }
+}

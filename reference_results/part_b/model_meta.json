@@ -1,0 +1,1 @@
+{"model": "gbt", "zone_k": 40, "seed": 1, "param": 60, "refit_max_abs_score_diff_vs_logged": 0.5205901829733883}

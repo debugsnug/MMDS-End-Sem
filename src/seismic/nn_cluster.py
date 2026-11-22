@@ -23,7 +23,7 @@ from pyspark.ml.clustering import GaussianMixture
 from pyspark.ml.linalg import Vectors
 from pyspark.sql import DataFrame, SparkSession, functions as F
 
-from .blocking import blocked_pairs, refine_pairs
+from .blocking import blocked_pairs, exact_condition, refine_pairs
 from .geo import gk_radius_km_col, gk_radius_km_np
 
 SECONDS_PER_YEAR = 365.25 * 86400.0
@@ -76,6 +76,22 @@ def count_blocked_pairs(children: DataFrame, parents: Optional[DataFrame], cfg,
                               parent_radius_km=_search_radius(F.col("p_magnitude"), cfg),
                               lookback_days=cfg.nn_max_days, salt_buckets=salt).count()
     return n_blocked, children.count() * parents.count()
+
+
+def count_pairs(children: DataFrame, parents: Optional[DataFrame], cfg, salt_buckets: Optional[int] = None) -> dict:
+    """Pair counts for the scalability report, in ONE pass over the blocked join:
+    candidates after blocking, pairs that survive the exact test, and the naive n_children * n_parents.
+    (The naive count is all ordered pairs; the exact-test count is what the search really has to examine.)"""
+    parents = children if parents is None else parents
+    salt = cfg.nn_salt_buckets if salt_buckets is None else salt_buckets
+    mmax = parents.agg(F.max("magnitude")).first()[0]
+    r_max = float(cfg.nn_radius_scale * gk_radius_km_np(mmax))
+    pairs = blocked_pairs(children, parents, max_radius_km=r_max, parent_radius_km=_search_radius(F.col("p_magnitude"), cfg),
+                          lookback_days=cfg.nn_max_days, salt_buckets=salt)
+    ok = exact_condition(cfg.nn_max_days, _search_radius(F.col("p_magnitude"), cfg))
+    r = pairs.agg(F.count("*").alias("blocked"), F.sum(ok.cast("long")).alias("exact")).first()
+    naive = children.count() * parents.count()
+    return {"blocked": int(r["blocked"]), "exact": int(r["exact"] or 0), "naive": int(naive)}
 
 
 def estimate_eta0_log10(nn: DataFrame, default: float, seed: int = 7, min_events: int = 200) -> Tuple[float, dict]:

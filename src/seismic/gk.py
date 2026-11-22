@@ -45,6 +45,64 @@ def select_mainshocks(cand: pd.DataFrame) -> pd.DataFrame:
     c["radius_km"] = L
     return c
 
+def select_mainshocks_causal(cand: pd.DataFrame) -> pd.DataFrame:
+    """Select independent G-K mainshocks chronologically.
+
+    An event can only be classified using mainshocks observed earlier.
+    Later events never change an earlier event's mainshock status.
+    """
+    c = cand.sort_values(["t_sec", "event_id"]).reset_index(drop=True).copy()
+
+    active = []
+    selected = []
+
+    for r in c.itertuples():
+        t = float(r.t_sec)
+
+        # Retain only mainshocks whose G-K time windows are still active.
+        active = [a for a in active
+                  if t > a["t_sec"]
+                  and t <= a["t_sec"] + a["window_days"] * 86400.0]
+
+        dependent = False
+
+        for a in active:
+            if (a["magnitude"] > r.magnitude
+                    and haversine_km_np(
+                        a["latitude"], a["longitude"],
+                        r.latitude, r.longitude
+                    ) <= a["radius_km"]):
+                dependent = True
+                break
+
+        if not dependent:
+            window_days = float(gk_window_days_np(float(r.magnitude)))
+            radius_km = float(gk_radius_km_np(float(r.magnitude)))
+
+            selected.append({
+                "event_id": r.event_id,
+                "event_time": r.event_time,
+                "t_sec": t,
+                "latitude": float(r.latitude),
+                "longitude": float(r.longitude),
+                "magnitude": float(r.magnitude),
+                "place": r.place,
+                "window_days": window_days,
+                "radius_km": radius_km,
+                "is_mainshock": True
+            })
+
+            active.append({
+                "event_id": r.event_id,
+                "t_sec": t,
+                "latitude": float(r.latitude),
+                "longitude": float(r.longitude),
+                "magnitude": float(r.magnitude),
+                "window_days": window_days,
+                "radius_km": radius_km
+            })
+
+    return pd.DataFrame(selected)
 
 def mainshocks_to_spark(spark: SparkSession, ms_pdf: pd.DataFrame) -> DataFrame:
     rows = []
@@ -111,6 +169,32 @@ def run_gk(spark: SparkSession, events: DataFrame, mainshock_min_mag: float = 6.
     after = assign_aftershocks(events, ms_sdf, grid_deg=grid)
     return ms_sdf, after, grid
 
+def run_gk_causal(spark: SparkSession, events: DataFrame,
+                  mainshock_min_mag: float = 6.0,
+                  use_grid: bool = True):
+    """Chronological, causal G-K pass for classification features."""
+
+    cand = (
+        events.filter(F.col("magnitude") >= mainshock_min_mag)
+        .select("event_id", "event_time", "t_sec", "latitude",
+                "longitude", "magnitude", "place")
+        .toPandas()
+    )
+
+    if cand.empty:
+        raise ValueError("No G-K mainshock candidates.")
+
+    sel = select_mainshocks_causal(cand)
+    ms_sdf = mainshocks_to_spark(spark, sel)
+
+    grid = (
+        choose_grid_deg(sel.radius_km.values, sel.latitude.values)
+        if use_grid and not sel.empty else None
+    )
+
+    after = assign_aftershocks(events, ms_sdf, grid_deg=grid)
+
+    return ms_sdf, after, grid
 
 def gk_label_table(events: DataFrame, aftershocks: DataFrame) -> DataFrame:
     """One row per event: G-K aftershock flag and G-K cluster id.

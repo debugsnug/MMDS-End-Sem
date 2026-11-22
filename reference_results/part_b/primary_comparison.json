@@ -1,0 +1,30 @@
+{
+  "zone_k": 40,
+  "best_model": "gbt",
+  "base_rate_test": 0.23155399094762555,
+  "primary_C_vs_B": {
+    "diff": 0.002521646523355403,
+    "ci_low": -0.0009157010250298331,
+    "ci_high": 0.006912367855483491,
+    "includes_zero": true,
+    "seed_sd": 0.00044429915273717246,
+    "base_ap": 0.7934462228004847,
+    "new_ap": 0.7959678693238402,
+    "n_boot_used": 1000,
+    "unit": "event",
+    "n_groups": 9449,
+    "event_bootstrap": {
+      "ci_low": -0.0002731269104575847,
+      "ci_high": 0.005454843461039613,
+      "includes_zero": true
+    },
+    "bootstrap_unit": "cluster",
+    "concentration_top5": {
+      "top": 5,
+      "share_of_positives": 0.3174061433447099,
+      "share_of_events": 0.08865579423809182,
+      "n_groups": 9449
+    },
+    "interpretation": "interval includes zero: no clear difference established (this is not proof of no benefit)"
+  }
+}

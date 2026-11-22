@@ -123,7 +123,8 @@ def test_runlog_resumable(tmp_path):
 
 
 # ------------------------------------------------------------------ whole Part B
-def test_part_b_end_to_end_and_resume(spark, ev, cfg, tmp_path):
+def test_part_b_end_to_end_and_resume(spark, ev, cat, cfg, tmp_path):
+    cat_true = cat
     from dataclasses import replace
     c = replace(cfg, models=["lr", "rf"], feature_sets=["A", "B", "C"], zone_k_candidates=[5], seeds=[1, 2],
                 class_weights_sensitivity=True)
@@ -135,11 +136,14 @@ def test_part_b_end_to_end_and_resume(spark, ev, cfg, tmp_path):
     train, val, test = fe.time_split(feats, c, end)
     assert train.filter("y=1").count() > 10 and test.filter("y=1").count() > 5
 
-    res = modeling.run_part_b(spark, train, val, test, c, out)
+    tc = cat_true.set_index("event_id").true_cluster
+    gm = pd.Series(np.where(tc.values >= 0, tc.values.astype(str), tc.index.values), index=tc.index)    # sequences + singleton background
+    res = modeling.run_part_b(spark, train, val, test, c, out, group_map=gm)
     log = pd.read_csv(os.path.join(out, "run_log.csv"))
     runs = log[log.part == "B"]
-    # LR: 1 seed x 3 sets, RF: 2 seeds x 3 sets, plus class-weight runs for B and C
-    assert len(runs[runs.weighted == False]) == 3 + 6          # noqa: E712
+    # LR: 1 seed x 3 sets, RF: 2 seeds x 3 sets, plus the simple baseline S:lr and class-weight runs for B and C
+    assert len(runs[(runs.weighted == False) & (runs.feature_set.isin(list("ABC")))]) == 3 + 6          # noqa: E712
+    assert (runs.feature_set == "S").sum() == 1 and runs[runs.feature_set == "S"].model.iloc[0] == "lr"
     assert len(runs[runs.weighted == True]) == 2               # noqa: E712
     assert (runs.test_pr_auc_ap > 0).all() and (runs.test_roc_auc > 0.4).all()
     # PR-AUC must be judged against the base rate, which every run records
@@ -150,9 +154,20 @@ def test_part_b_end_to_end_and_resume(spark, ev, cfg, tmp_path):
     sc = [pd.read_csv(os.path.join(out, "scores", f)) for f in os.listdir(os.path.join(out, "scores")) if "w0" in f]
     assert all((s.event_id.values == sc[0].event_id.values).all() for s in sc)
     prim = res["primary_C_vs_B"]
-    assert {"diff", "ci_low", "ci_high", "includes_zero", "seed_sd", "interpretation"} <= set(prim)
+    assert {"diff", "ci_low", "ci_high", "includes_zero", "seed_sd", "interpretation", "event_bootstrap", "bootstrap_unit"} <= set(prim)
+    assert prim["bootstrap_unit"] == "cluster" and prim["n_groups"] > 10
+    meta = json.load(open(os.path.join(out, "models", "meta.json")))
+    assert meta["model"] == res["best_model"]            # the saved set-C pipeline is the classifier that is actually best
     assert prim["ci_low"] <= prim["diff"] <= prim["ci_high"] or prim["includes_zero"] is not None
     assert os.path.isdir(os.path.join(out, "models", "pipeline_C"))
+
+    # the zone model is persisted at first use and reloaded on resume (same zones as the logged scores)
+    assert os.path.isdir(os.path.join(out, "models", "zone_kmeans"))
+    # resume with the saved pipeline deleted: it is refitted once and must reproduce the logged scores
+    shutil.rmtree(os.path.join(out, "models", "pipeline_C")); os.remove(os.path.join(out, "models", "meta.json"))
+    modeling.run_part_b(spark, train, val, test, c, out, group_map=gm)
+    meta2 = json.load(open(os.path.join(out, "models", "meta.json")))
+    assert meta2["refit_max_abs_score_diff_vs_logged"] is not None and meta2["refit_max_abs_score_diff_vs_logged"] < 1e-3
 
     # resume: nothing is refitted, the log does not grow, results are identical
     n_before = len(RunLog(os.path.join(out, "run_log.csv")).df)
