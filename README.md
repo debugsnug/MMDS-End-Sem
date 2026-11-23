@@ -88,7 +88,6 @@ MMDS Project 2/
 ├── cluster_sensitivity_k40/
 │   └── Controlled k=40 experiment outputs
 │
-├── CHANGES.md
 ├── README.md
 ├── requirements.txt
 └── pytest.ini
@@ -312,8 +311,6 @@ Validation compared the causal and earlier implementations on the evaluated cata
 - G–K event flags were identical.
 - Complete feature tables were identical.
 - Classification metrics remained unchanged.
-
-Further implementation details are documented in `CHANGES.md`.
 
 ## 9. Testing and Validation
 
